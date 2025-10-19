@@ -8,6 +8,7 @@
 - 💾 使用 DynamoDB 存储旅行计划和用户数据
 - 🔄 支持流式和普通两种对话模式
 - 🔍 支持搜索和过滤历史行程
+- 🗺️ 集成 Google Maps API 获取精确地理坐标
 - 🌐 完整的 RESTful API
 
 ## 🛠 技术栈
@@ -15,6 +16,7 @@
 - **Backend**: Flask + Python 3.11
 - **AI**: AWS Bedrock Agent
 - **Database**: AWS DynamoDB
+- **Maps**: Google Maps Geocoding API
 - **Cloud**: AWS Lambda (可选部署)
 
 ## 🚀 快速开始
@@ -37,7 +39,24 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-编辑 `.env` 文件，填入你的 AWS 凭证和配置。
+编辑 `.env` 文件，填入你的 AWS 凭证和 Google Maps API Key：
+```env
+# AWS 配置
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+BEDROCK_AGENT_ID=your-agent-id
+BEDROCK_AGENT_ALIAS_ID=your-alias-id
+DYNAMODB_TABLE_NAME=TravelPlannerConversations
+
+# Google Maps 配置
+GOOGLE_MAPS_API_KEY=your-google-maps-api-key
+
+# Flask 配置
+FLASK_ENV=development
+FLASK_PORT=5000
+CORS_ORIGINS=http://localhost:3000
+```
 
 ### 4. 运行服务
 ```bash
@@ -208,17 +227,223 @@ GET /api/trips/{userId}/parameters?limit=10
 
 ---
 
-### 3. 其他接口
+### 3. 地点增强接口 🗺️
 
-#### 3.1 健康检查
+这些接口用于获取地点的精确地理坐标，方便前端在地图上标注。
+
+#### 3.1 增强地点列表
+
+**接口**
+```http
+POST /api/locations/enrich
+```
+
+**请求体**
+```json
+{
+  "locations": ["Tokyo Tower", "Senso-ji Temple", "Shibuya Crossing"]
+}
+```
+
+**响应示例**
+```json
+{
+  "success": true,
+  "message": "Processed 3 locations, 0 failed",
+  "data": {
+    "locations": {
+      "Tokyo Tower": {
+        "lat": 35.6586,
+        "lng": 139.7454,
+        "formatted_address": "4 Chome-2-8 Shibakoen, Minato City, Tokyo 105-0011, Japan",
+        "place_id": "ChIJCewJkL2LGGAR3Qmk0vCTGkg"
+      },
+      "Senso-ji Temple": {
+        "lat": 35.7147651,
+        "lng": 139.7966553,
+        "formatted_address": "2 Chome-3-1 Asakusa, Taito City, Tokyo 111-0032, Japan",
+        "place_id": "ChIJ8T1GpMGOGGARDYGSgpooDWw"
+      },
+      "Shibuya Crossing": {
+        "lat": 35.6595,
+        "lng": 139.7004,
+        "formatted_address": "Shibuya City, Tokyo 150-0002, Japan",
+        "place_id": "ChIJXSModoL1GGARYGSgpooDWxI"
+      }
+    },
+    "failed_count": 0
+  }
+}
+```
+
+---
+
+#### 3.2 批量增强地点（带上下文）
+
+**接口**
+```http
+POST /api/locations/enrich-batch
+```
+
+**请求体**
+```json
+{
+  "locations": [
+    {
+      "name": "Tokyo Tower",
+      "context": "Tokyo, Japan"
+    },
+    {
+      "name": "Eiffel Tower",
+      "context": "Paris, France"
+    }
+  ]
+}
+```
+
+**说明**: 通过添加 `context` 字段（城市、国家等），可以提高地点识别的准确性。
+
+**响应格式**: 同 3.1
+
+---
+
+#### 3.3 增强完整行程坐标 ⭐
+
+**接口**
+```http
+POST /api/locations/enrich-itinerary
+```
+
+**使用场景**: 从数据库读取完整行程，自动为所有地点添加精确坐标，方便前端地图展示。
+
+**请求体（方式1 - 传 conversationId）**
+```json
+{
+  "userId": "test-session-321",
+  "conversationId": "conv-1760840130674"
+}
+```
+
+**请求体（方式2 - 直接传 itinerary）**
+```json
+{
+  "itinerary": [
+    {
+      "day": 1,
+      "date": "2024-05-01",
+      "theme": "Tokyo Highlights",
+      "activities": [
+        {
+          "time": "09:00",
+          "type": "attraction",
+          "name": "Senso-ji Temple",
+          "address": "2 Chome-3-1 Asakusa, Taito City, Tokyo 111-0032, Japan",
+          "duration_minutes": 120,
+          "cost_estimate_usd": 0
+        }
+      ]
+    }
+  ]
+}
+```
+
+**响应示例**
+```json
+{
+  "success": true,
+  "message": "Enriched 9/9 locations",
+  "data": {
+    "itinerary_with_coords": [
+      {
+        "day": 1,
+        "date": "2024-05-01",
+        "theme": "Tokyo Highlights",
+        "activities": [
+          {
+            "time": "09:00",
+            "type": "attraction",
+            "name": "Senso-ji Temple",
+            "address": "2 Chome-3-1 Asakusa, Taito City, Tokyo 111-0032, Japan",
+            "duration_minutes": 120,
+            "cost_estimate_usd": 0,
+            "coordinates": {
+              "lat": 35.7147651,
+              "lng": 139.7966553,
+              "formatted_address": "2 Chome-3-1 Asakusa, Taito City, Tokyo 111-0032, Japan",
+              "place_id": "ChIJ8T1GpMGOGGARDYGSgpooDWw"
+            }
+          },
+          {
+            "time": "12:00",
+            "type": "restaurant",
+            "name": "Sometaro",
+            "address": "2 Chome-2-2 Nishi-Asakusa, Taito City, Tokyo 111-0035, Japan",
+            "duration_minutes": 90,
+            "cost_estimate_usd": 40,
+            "coordinates": {
+              "lat": 35.7214891,
+              "lng": 139.7883256,
+              "formatted_address": "2 Chome-2-2 Nishi-Asakusa, Taito City, Tokyo 111-0035, Japan",
+              "place_id": "ChIJX8T1GpMOGGARpooDWwDYGSg"
+            }
+          }
+        ]
+      }
+    ],
+    "summary": {
+      "total_locations": 9,
+      "enriched": 9,
+      "failed": 0
+    },
+    "failed_locations": []
+  }
+}
+```
+
+**特性**:
+- ✅ 保留原始 activity 的所有字段
+- ✅ 为每个 activity 添加 `coordinates` 字段
+- ✅ 自动处理失败的地点（coordinates 为 null）
+- ✅ 返回处理统计信息（成功/失败数量）
+- ✅ 支持从 DynamoDB 自动读取或直接传入数据
+
+---
+
+### 4. 其他接口
+
+#### 4.1 健康检查
 ```http
 GET /health
 ```
 
-#### 3.2 API 信息
+#### 4.2 API 信息
 ```http
 GET /
 ```
+
+---
+
+## 🌍 Google Maps API 配置
+
+### 获取 API Key
+
+1. 访问 [Google Cloud Console](https://console.cloud.google.com/)
+2. 创建或选择项目
+3. 启用 **Geocoding API**
+4. 创建 API 密钥
+5. 添加到 `.env` 文件：`GOOGLE_MAPS_API_KEY=your-key`
+
+### 免费额度
+
+- 每月 **$200** 免费额度
+- Geocoding API: **$5/1000 次请求**
+- 相当于每月免费 **40,000 次请求**
+
+### 成本优化建议
+
+- 使用缓存减少重复查询
+- 将常用地点坐标存储到数据库
+- 监控 API 使用量
 
 ---
 
