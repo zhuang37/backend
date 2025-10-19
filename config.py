@@ -16,6 +16,9 @@ class Config:
     # DynamoDB 配置
     DYNAMODB_TABLE_NAME = os.getenv('DYNAMODB_TABLE_NAME', 'TravelPlannerConversations')
     
+    # Google Maps 配置
+    GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY')
+    
     # Flask 配置
     FLASK_ENV = os.getenv('FLASK_ENV', 'development')
     FLASK_PORT = int(os.getenv('FLASK_PORT', 5000))

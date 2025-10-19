@@ -1,14 +1,21 @@
 import boto3
 import json
 from config import Config
+from botocore.config import Config as BotoConfig 
 
+#  这段代码定义了一个叫 BedrockService 的类，用来初始化 AWS 客户端，以便后续向 Bedrock 发送请求。
 class BedrockService:
     def __init__(self):
+        boto_config = BotoConfig(
+        read_timeout=300,  
+        connect_timeout=60
+        )
         self.client = boto3.client(
             'bedrock-agent-runtime',
             region_name=Config.AWS_REGION,
             aws_access_key_id=Config.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=Config.AWS_SECRET_ACCESS_KEY
+            aws_secret_access_key=Config.AWS_SECRET_ACCESS_KEY,
+            config=boto_config
         )
         self.agent_id = Config.BEDROCK_AGENT_ID
         self.agent_alias_id = Config.BEDROCK_AGENT_ALIAS_ID

@@ -64,7 +64,7 @@ class DynamoDBService:
     
     def get_trip_by_id(self, user_id: str, conversation_id: str) -> Optional[Dict]:
         """
-        获取特定行程详情
+        获取特定行程详情（不检查 dataType）
         
         Args:
             user_id: 用户ID
@@ -84,19 +84,23 @@ class DynamoDBService:
             item = response.get('Item')
             
             if item:
-                # 解析 JSON
+                # 解析 JSON（不管是 parameters 还是 itinerary）
                 if 'fullItinerary' in item:
                     item['itinerary'] = json.loads(item['fullItinerary'])
                     del item['fullItinerary']
                 if 'tripJson' in item:
                     item['tripData'] = json.loads(item['tripJson'])
                     del item['tripJson']
+                
+                return item
             
-            return item
+            return None
             
         except Exception as e:
             print(f"Error getting trip: {str(e)}")
             raise
+            
+
     
     def get_user_parameters(self, user_id: str, limit: int = 10) -> List[Dict]:
         """
